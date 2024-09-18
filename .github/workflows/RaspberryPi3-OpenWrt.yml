@@ -2,13 +2,13 @@ name: RaspberryPi3 OpenWrt
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: 0 17 * * *
+  # schedule:
+    # - cron: 0 17 * * *
 
 env:
-  REPO_URL: https://github.com/coolsnowwolf/lede
+  REPO_URL: https://github.com/openwrt/openwrt
   REPO_BRANCH: master
-  CONFIG_FILE: configs/rpi3.config
+  CONFIG_FILE: configs/raspi_3b_docker.config
   EXTRA_CONFIG: configs/extra.config
   DIY_SCRIPT: diy-script.sh
   CLASH_KERNEL: arm64
@@ -38,19 +38,48 @@ jobs:
         echo "--------------------------硬盘信息--------------------------"
         echo "硬盘数量: $(ls /dev/sd* | grep -v [1-9] | wc -l)" && df -hT
 
+    - name: 释放空间 (Ubuntu)
+      uses: jlumbroso/free-disk-space@main
+      with:
+        tool-cache: true
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        swap-storage: true
+        
     - name: Initialization Environment
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        docker rmi $(docker images -q)
-        sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android $AGENT_TOOLSDIRECTORY
+        # 只有在有镜像时才删除
+        docker images -q | xargs -r docker rmi
+        
+        # 删除不必要的文件和目录
+        sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d/* /usr/local/lib/android $AGENT_TOOLSDIRECTORY /opt/ghc /opt/hostedtoolcache/CodeQL
+        
+        # 仅当有包时才执行删除
         sudo -E apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
+        
+        # 更新apt-get的包列表
         sudo -E apt-get -y update
+        
+        # 初始化构建环境
+        sudo bash -c 'bash <(curl -s https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+        
+        # 安装依赖
         sudo -E apt-get -y install $(curl -fsSL is.gd/depends_ubuntu_2204)
+        
+        # 重新加载 systemd 服务
         sudo -E systemctl daemon-reload
+        
+        # 自动删除不再需要的包并清理缓存
         sudo -E apt-get -y autoremove --purge
         sudo -E apt-get -y clean
+        
+        # 设置时区
         sudo timedatectl set-timezone "$TZ"
+
 
     - name: Combine Disks
       uses: easimon/maximize-build-space@master
@@ -107,7 +136,7 @@ jobs:
       run: |
         [ -e files ] && mv files $OPENWRT_PATH/files
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE $OPENWRT_PATH/.config
-        cat $EXTRA_CONFIG >> $OPENWRT_PATH/.config
+        # cat $EXTRA_CONFIG >> $OPENWRT_PATH/.config
         chmod +x $GITHUB_WORKSPACE/scripts/*.sh
         chmod +x $DIY_SCRIPT
         cd $OPENWRT_PATH
@@ -182,7 +211,7 @@ jobs:
           - ⚽ 固件源码: ${{ env.REPO_URL }}
           - 💝 源码分支: ${{ env.REPO_BRANCH }}
           - 🚀 内核版本: ${{ env.KERNEL }}
-          - 🌐 默认地址: 192.168.1.1
+          - 🌐 默认地址: 192.168.4.40
           - 🔑 默认密码: password
           ### 🧊 固件版本
           - 固件编译前最后一次➦[主源码](${{ env.REPO_URL }})更新记录
