@@ -184,6 +184,7 @@ jobs:
         cd $OPENWRT_PATH/bin/targets/*/*
         cat sha256sums
         cp $OPENWRT_PATH/.config build.config
+        sed -i "s/192.168.1.1/$DEFAULT_IP/g" $OPENWRT_PATH/package/base-files/files/bin/config_generate
         mv -f $OPENWRT_PATH/bin/packages/*/*/*.ipk packages
         tar -zcf Packages.tar.gz packages
         rm -rf packages feeds.buildinfo version.buildinfo
